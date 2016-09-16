@@ -66,6 +66,20 @@ export interface IFormattingSettings {
 export interface IAutoCompeteSettings {
     extraPaths: string[];
 }
+// export interface IJupyterSettings {
+//     pythonPath: string;
+//     devOptions: any[];
+//     linting: ILintingSettings;
+//     formatting: IFormattingSettings;
+//     unitTest: IUnitTestSettings;
+//     autoComplete: IAutoCompeteSettings;
+// }
+// export interface IJupyterKernelSettings {
+//     kernelName?: string;
+//     languageId?: string;
+//     startupCode: string;
+// }
+
 const systemVariables: SystemVariables = new SystemVariables();
 export class PythonSettings extends EventEmitter implements IPythonSettings {
     private static pythonSettings: PythonSettings = new PythonSettings();
@@ -146,7 +160,7 @@ export class PythonSettings extends EventEmitter implements IPythonSettings {
 }
 
 function getAbsolutePath(pathToCheck: string, rootDir: String): string {
-    if (pathToCheck.indexOf(path.sep) === -1){
+    if (pathToCheck.indexOf(path.sep) === -1) {
         return pathToCheck;
     }
     return path.isAbsolute(pathToCheck) ? pathToCheck : path.resolve(rootDir, pathToCheck);
