@@ -1,7 +1,5 @@
 'use strict';
 
-import * as fs from 'fs';
-import * as os from 'os';
 import * as child_process from 'child_process';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -179,6 +177,27 @@ function killProcess() {
 }
 
 function handleError(source: string, errorMessage: string) {
+    if (errorMessage.startsWith('id=')) {
+        const responseId = parseInt(errorMessage.substring(3, errorMessage.indexOf(',')));
+        errorMessage = errorMessage.substring(errorMessage.indexOf('$') + 1);
+
+        const cmd: IExecutionCommand<ICommandResult> = commands.has(responseId) ? commands.get(responseId) : null;
+        if (typeof cmd === "object" && cmd !== null) {
+            commands.delete(responseId);
+            var index = commandQueue.indexOf(cmd.id);
+            commandQueue.splice(index, 1);
+
+            if (cmd.delays) {
+                cmd.delays.stop();
+                telemetryHelper.sendTelemetryEvent(cmd.telemetryEvent, null, cmd.delays.toMeasures());
+            }
+
+            // Check if this command has expired
+            if (!cmd.token.isCancellationRequested) {
+                cmd.reject(errorMessage);
+            }
+        }
+    }
     logger.error(source + ' jediProxy', `Error (${source}) ${errorMessage}`);
 }
 
@@ -200,6 +219,7 @@ function spawnProcess(dir: string) {
     catch (ex) {
         return handleError("spawnProcess", ex.message);
     }
+    proc.stderr.setEncoding('utf8');
     proc.stderr.on("data", (data) => {
         handleError("stderr", data);
     });
@@ -210,10 +230,11 @@ function spawnProcess(dir: string) {
         handleError("error", error);
     });
 
+    proc.stderr.setEncoding('utf8');
     proc.stdout.on("data", (data) => {
         //Possible there was an exception in parsing the data returned
         //So append the data then parse it
-        var dataStr = previousData = previousData + data + ""
+        var dataStr = previousData = previousData + data + '';
         var responses: any[];
         try {
             responses = dataStr.split(/\r?\n/g).filter(line => line.length > 0).map(resp => JSON.parse(resp));
@@ -589,7 +610,7 @@ export class JediProxyHandler<R extends ICommandResult, T> {
         this.parseResponse = parseResponse;
     }
 
-    public sendCommand(cmd: ICommand<R>, resolve: (value: T) => void, token?: vscode.CancellationToken) {
+    public sendCommand(cmd: ICommand<R>, resolve: (value: T) => void, token?: vscode.CancellationToken, reject?: (reason: any) => void) {
         var executionCmd = <IExecutionCommand<R>>cmd;
         executionCmd.id = executionCmd.id || this.jediProxy.getNextCommandId();
 
@@ -603,7 +624,7 @@ export class JediProxyHandler<R extends ICommandResult, T> {
         this.cancellationTokenSource = new vscode.CancellationTokenSource();
         executionCmd.token = this.cancellationTokenSource.token;
 
-        this.jediProxy.sendCommand<R>(executionCmd).then(data => this.onResolved(data), () => { });
+        this.jediProxy.sendCommand<R>(executionCmd).then(data => this.onResolved(data), reason => { if (reject) { reject(reason); } });
         this.lastCommandId = executionCmd.id;
         this.lastToken = token;
         this.promiseResolve = resolve;

@@ -291,7 +291,6 @@ class JediCompletion(object):
     def _process_request(self, request):
         """Accept serialized request from VSCode and write response.
         """
-        request = self._deserialize(request)
 
         self._set_request_config(request.get('config', {}))
 
@@ -300,10 +299,13 @@ class JediCompletion(object):
             sys.path.insert(0, path)
         lookup = request.get('lookup', 'completions')
 
-        if lookup == 'names':
+        if lookup == 'names':            
+            source = request['source']
+            if len(source) == 0:
+                source = None
             return self._write_response(self._serialize_definitions(
                 jedi.api.names(
-                    source=request['source'], 
+                    source=source, 
                     path=request.get('path', ''),
                     all_scopes=True),
                 request['id']))
@@ -332,10 +334,14 @@ class JediCompletion(object):
 
     def watch(self):
         while True:
+            id = 0
             try:
-                self._process_request(self._input.readline())
+                data = self._input.readline()
+                request = self._deserialize(data)
+                id = request['id']
+                self._process_request(request)
             except Exception:
-                sys.stderr.write(traceback.format_exc() + '\n')
+                sys.stderr.write('id=' + str(id) + ',\n$' + traceback.format_exc() + '\n')
                 sys.stderr.flush()
 
 if __name__ == '__main__':
